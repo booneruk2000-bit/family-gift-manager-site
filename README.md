@@ -26,22 +26,20 @@ family-gift-manager-site/
 
 ## Quick Install on Debian 13 (Trixie) LXC
 
-Run the standalone installer inside your Debian 13 LXC container as `root` (or with `sudo`). It installs all prerequisites (`git`, `curl`, `ca-certificates`, `caddy`), clones the latest `main` branch into `/opt/family-gift-manager`, and sets up the `family-gift-manager.service` systemd daemon:
+Run the standalone installer inside your Debian 13 LXC container as `root` (or with `sudo`). It will interactively prompt you to confirm the **install path** (default: `/opt/fgm-website`), an optional **domain** for automatic HTTPS, and the **HTTP port** to run the web server on (default: `80`), then install all prerequisites (`git`, `curl`, `ca-certificates`, `caddy`), pull the latest `main` branch, and configure the `family-gift-manager.service` systemd daemon:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash
 ```
 
-### Custom Port (Behind Reverse Proxy / Cloudflare Tunnel)
+### Non-Interactive / Custom Options
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash -s -- --port 8080
-```
+# Unattended install on port 8080 into /opt/fgm-website (e.g., behind a reverse proxy)
+curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash -s -- --dir /opt/fgm-website --port 8080 -y
 
-### Direct Domain with Automatic HTTPS (Let's Encrypt via Caddy)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash -s -- --domain familygiftmanager.example.com
+# Unattended install with a domain and automatic HTTPS (Let's Encrypt via Caddy)
+curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash -s -- --dir /opt/fgm-website --domain familygiftmanager.example.com -y
 ```
 
 ### Managing the Daemon
@@ -54,7 +52,7 @@ systemctl status family-gift-manager
 journalctl -u family-gift-manager -f
 
 # Pull latest changes from main and reload
-sudo /opt/family-gift-manager/scripts/update.sh
+sudo /opt/fgm-website/scripts/update.sh
 ```
 
 ## Customizing the Privacy Policy Template
@@ -63,7 +61,7 @@ sudo /opt/family-gift-manager/scripts/update.sh
 2. Search for `class="placeholder"` and replace every bracketed `[placeholder]` with your real details (effective date, controller/developer name, contact email, domain, Android package name, hosting provider, etc.).
 3. Remove the `<div class="template-notice">...</div>` banner at the top of the policy once reviewed.
 4. Update `site/ads.txt` (for AdSense) and `site/app-ads.txt` (for AdMob) with your real Google Publisher ID (`pub-xxxxxxxxxxxxxxxx`).
-5. Merge `dev` into `main`, then run `sudo /opt/family-gift-manager/scripts/update.sh` on your Debian 13 LXC.
+5. Merge `dev` into `main`, then run `sudo /opt/fgm-website/scripts/update.sh` on your Debian 13 LXC.
 
 ## Clean URLs Included
 

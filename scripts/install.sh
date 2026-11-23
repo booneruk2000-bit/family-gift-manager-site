@@ -10,12 +10,13 @@
 #   curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash
 #
 # Options (via flags or environment variables):
-#   --repo URL       GitHub repository URL (default: https://github.com/booneruk2000-bit/family-gift-manager-site.git)
-#   --branch NAME    Git branch to deploy (default: main)
-#   --port PORT      HTTP port to listen on when --domain is not set (default: 80)
-#   --domain DOMAIN  Domain name for automatic HTTPS via Caddy (optional)
-#   --dir PATH       Install directory (default: /opt/family-gift-manager)
-#   -h, --help       Show this help message
+#   --repo URL          GitHub repository URL (default: https://github.com/booneruk2000-bit/family-gift-manager-site.git)
+#   --branch NAME       Git branch to deploy (default: main)
+#   --port PORT         HTTP port to listen on when --domain is not set (default: 80)
+#   --domain DOMAIN     Domain name for automatic HTTPS via Caddy (optional)
+#   --dir PATH          Install directory (default: /opt/fgm-website)
+#   -y, --non-interactive  Skip interactive prompts and use defaults / passed flags
+#   -h, --help          Show this help message
 # ==============================================================================
 
 set -euo pipefail
@@ -24,7 +25,12 @@ REPO_URL="${REPO_URL:-https://github.com/booneruk2000-bit/family-gift-manager-si
 BRANCH="${BRANCH:-main}"
 PORT="${PORT:-80}"
 DOMAIN="${DOMAIN:-}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/family-gift-manager}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/fgm-website}"
+NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
+PORT_SET=false
+DIR_SET=false
+DOMAIN_SET=false
+
 CONFIG_DIR="/etc/family-gift-manager"
 STATE_DIR="/var/lib/family-gift-manager"
 SERVICE_NAME="family-gift-manager"
@@ -32,7 +38,7 @@ SERVICE_USER="fgm-web"
 SERVICE_GROUP="fgm-web"
 
 usage() {
-  sed -n '2,20p' "$0"
+  sed -n '2,22p' "$0"
 }
 
 log() {
@@ -48,6 +54,26 @@ err() {
   exit 1
 }
 
+prompt_tty() {
+  local prompt_text="$1"
+  local default_val="$2"
+  local reply=""
+
+  if [[ -n "${default_val}" ]]; then
+    printf '\033[1;36m?\033[0m %s [\033[1m%s\033[0m]: ' "${prompt_text}" "${default_val}" >/dev/tty
+  else
+    printf '\033[1;36m?\033[0m %s: ' "${prompt_text}" >/dev/tty
+  fi
+
+  IFS= read -r reply </dev/tty || true
+  printf '%s' "${reply:-${default_val}}"
+}
+
+is_valid_port() {
+  local p="$1"
+  [[ "${p}" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= 65535 ))
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
@@ -60,15 +86,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --port)
       PORT="${2:?Missing value for --port}"
+      PORT_SET=true
       shift 2
       ;;
     --domain)
       DOMAIN="${2:?Missing value for --domain}"
+      DOMAIN_SET=true
       shift 2
       ;;
     --dir)
       INSTALL_DIR="${2:?Missing value for --dir}"
+      DIR_SET=true
       shift 2
+      ;;
+    -y|--non-interactive)
+      NON_INTERACTIVE=true
+      shift
       ;;
     -h|--help)
       usage
@@ -105,11 +138,66 @@ if ! command -v systemctl >/dev/null 2>&1; then
   err "systemd (systemctl) is required to create the service daemon."
 fi
 
-if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+# 2. Interactive configuration prompts (works even when piped via curl | sudo bash)
+if [[ "${NON_INTERACTIVE}" != "true" ]] && [[ -r /dev/tty && -w /dev/tty ]]; then
+  echo "" >/dev/tty
+  printf '\033[1;32m=== Family Gift Manager — Debian 13 LXC Setup ===\033[0m\n' >/dev/tty
+  echo "" >/dev/tty
+
+  if [[ "${DIR_SET}" != "true" ]]; then
+    while true; do
+      INSTALL_DIR="$(prompt_tty "Install directory for the website" "${INSTALL_DIR}")"
+      if [[ "${INSTALL_DIR}" == /* ]] && [[ "${INSTALL_DIR}" != "/" ]]; then
+        break
+      fi
+      printf '\033[1;33m  Please enter an absolute path (e.g., /opt/fgm-website).\033[0m\n' >/dev/tty
+    done
+  fi
+
+  if [[ "${DOMAIN_SET}" != "true" ]]; then
+    DOMAIN="$(prompt_tty "Domain name for automatic HTTPS (leave blank for HTTP port only)" "${DOMAIN}")"
+  fi
+
+  if [[ -z "${DOMAIN}" ]] && [[ "${PORT_SET}" != "true" ]]; then
+    while true; do
+      PORT="$(prompt_tty "HTTP port to run the web server on" "${PORT}")"
+      if is_valid_port "${PORT}"; then
+        break
+      fi
+      printf '\033[1;33m  Invalid port. Please enter a number between 1 and 65535.\033[0m\n' >/dev/tty
+    done
+  fi
+
+  echo "" >/dev/tty
+  printf '\033[1mInstallation Summary:\033[0m\n' >/dev/tty
+  printf '  Repository:      %s (%s)\n' "${REPO_URL}" "${BRANCH}" >/dev/tty
+  printf '  Install Path:    %s\n' "${INSTALL_DIR}" >/dev/tty
+  if [[ -n "${DOMAIN}" ]]; then
+    printf '  Web Address:     https://%s (automatic HTTPS)\n' "${DOMAIN}" >/dev/tty
+  else
+    printf '  Web Server Port: %s (HTTP)\n' "${PORT}" >/dev/tty
+  fi
+  echo "" >/dev/tty
+
+  CONFIRM="$(prompt_tty "Proceed with installation? (Y/n)" "Y")"
+  case "${CONFIRM}" in
+    [Yy]|[Yy][Ee][Ss]|"") ;;
+    *)
+      log "Installation cancelled by user."
+      exit 0
+      ;;
+  esac
+fi
+
+if [[ -z "${DOMAIN}" ]] && ! is_valid_port "${PORT}"; then
   err "Invalid port: ${PORT}"
 fi
 
-# 2. Install prerequisites
+if [[ "${INSTALL_DIR}" != /* ]] || [[ "${INSTALL_DIR}" == "/" ]]; then
+  err "Invalid install directory: ${INSTALL_DIR} (must be an absolute path like /opt/fgm-website)"
+fi
+
+# 3. Install prerequisites
 log "Installing prerequisites (git, curl, ca-certificates, caddy)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -123,7 +211,7 @@ if systemctl list-unit-files caddy.service >/dev/null 2>&1; then
   fi
 fi
 
-# 3. Create dedicated system user & directories
+# 4. Create dedicated system user & directories
 if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
   log "Creating system user '${SERVICE_USER}'..."
   useradd --system --home-dir "${STATE_DIR}" --shell /usr/sbin/nologin --user-group "${SERVICE_USER}"
@@ -132,7 +220,7 @@ fi
 mkdir -p "${CONFIG_DIR}" "${STATE_DIR}/config"
 chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${STATE_DIR}"
 
-# 4. Clone or pull the latest version from the target branch (default: main)
+# 5. Clone or pull the latest version from the target branch (default: main)
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   log "Updating existing repository in ${INSTALL_DIR} (branch: ${BRANCH})..."
   git -C "${INSTALL_DIR}" remote set-url origin "${REPO_URL}"
@@ -152,7 +240,7 @@ fi
 chown -R root:"${SERVICE_GROUP}" "${INSTALL_DIR}"
 chmod -R g+rX "${INSTALL_DIR}"
 
-# 5. Render Caddyfile configuration
+# 6. Render Caddyfile configuration
 if [[ -n "${DOMAIN}" ]]; then
   SITE_ADDRESS="${DOMAIN}"
 else
@@ -172,7 +260,7 @@ chmod 640 "${CADDYFILE_PATH}"
 # Validate Caddyfile before starting daemon
 caddy validate --config "${CADDYFILE_PATH}" --adapter caddyfile >/dev/null
 
-# 6. Install and start systemd daemon
+# 7. Install and start systemd daemon
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 log "Installing systemd daemon at ${SERVICE_FILE}..."
 sed \
@@ -188,7 +276,7 @@ systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}.service" >/dev/null
 systemctl restart "${SERVICE_NAME}.service"
 
-# 7. Verify daemon health
+# 8. Verify daemon health
 sleep 1
 if ! systemctl is-active --quiet "${SERVICE_NAME}.service"; then
   journalctl -u "${SERVICE_NAME}.service" -n 30 --no-pager >&2 || true
@@ -206,6 +294,7 @@ fi
 IP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo ""
 log "Installation complete!"
+echo "  Install Path:       ${INSTALL_DIR}"
 if [[ -n "${DOMAIN}" ]]; then
   echo "  Site URL:           https://${DOMAIN}/"
   echo "  Privacy Policy URL: https://${DOMAIN}/privacy-policy"
