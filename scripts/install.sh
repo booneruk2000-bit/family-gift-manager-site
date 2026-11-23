@@ -38,7 +38,21 @@ SERVICE_USER="fgm-web"
 SERVICE_GROUP="fgm-web"
 
 usage() {
-  sed -n '2,22p' "$0"
+  cat <<'EOF'
+Family Gift Manager — Standalone Debian 13 (Trixie) LXC Installer
+
+Usage:
+  curl -fsSL https://raw.githubusercontent.com/booneruk2000-bit/family-gift-manager-site/main/scripts/install.sh | sudo bash
+
+Options (via flags or environment variables):
+  --repo URL             GitHub repository URL (default: https://github.com/booneruk2000-bit/family-gift-manager-site.git)
+  --branch NAME          Git branch to deploy (default: main)
+  --port PORT            HTTP port to listen on when --domain is not set (default: 80)
+  --domain DOMAIN        Domain name for automatic HTTPS via Caddy (optional)
+  --dir PATH             Install directory (default: /opt/fgm-website)
+  -y, --non-interactive  Skip interactive prompts and use defaults / passed flags
+  -h, --help             Show this help message
+EOF
 }
 
 log() {
