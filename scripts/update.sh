@@ -5,9 +5,16 @@
 
 set -euo pipefail
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/family-gift-manager}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_INSTALL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ ! -d "${DEFAULT_INSTALL_DIR}/.git" ]]; then
+  DEFAULT_INSTALL_DIR="/opt/fgm-website"
+fi
+
+INSTALL_DIR="${INSTALL_DIR:-${DEFAULT_INSTALL_DIR}}"
 BRANCH="${BRANCH:-main}"
 SERVICE_NAME="family-gift-manager"
+SERVICE_GROUP="fgm-web"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Please run as root (e.g., sudo $0)" >&2
@@ -19,10 +26,13 @@ if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
   exit 1
 fi
 
-echo "[fgm-update] Fetching latest '${BRANCH}' branch..."
+echo "[fgm-update] Fetching latest '${BRANCH}' branch in ${INSTALL_DIR}..."
 git -C "${INSTALL_DIR}" fetch --depth 1 origin "${BRANCH}"
 git -C "${INSTALL_DIR}" checkout -B "${BRANCH}" "origin/${BRANCH}"
 git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}"
+
+chown -R root:"${SERVICE_GROUP}" "${INSTALL_DIR}"
+chmod -R g+rX "${INSTALL_DIR}"
 
 echo "[fgm-update] Reloading ${SERVICE_NAME}.service..."
 systemctl reload-or-restart "${SERVICE_NAME}.service"
