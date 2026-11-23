@@ -1,3 +1,1 @@
-# Google AdMob Authorized Sellers for Apps (app-ads.txt)
-# Replace pub-0000000000000000 with your real Google AdMob Publisher ID and uncomment the line below:
-# google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+google.com, pub-3736206982003666, DIRECT, f08c47fec0942fa0
