@@ -1,0 +1,32 @@
+{
+	admin off
+}
+
+__SITE_ADDRESS__ {
+	root * __SITE_ROOT__
+	encode zstd gzip
+
+	# Security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Clean URL aliases for the Privacy Policy (useful for Google Play / AdMob / AdSense)
+	@privacyAlias path /privacy /privacy/ /privacy-policy /privacy-policy/
+	rewrite @privacyAlias /privacy-policy.html
+
+	# Long cache for static assets
+	@static path /assets/*
+	header @static Cache-Control "public, max-age=86400"
+
+	file_server
+
+	handle_errors {
+		@404 expression {http.error.status_code} == 404
+		rewrite @404 /404.html
+		file_server
+	}
+}
