@@ -11,7 +11,6 @@ Group=__SERVICE_GROUP__
 Environment=XDG_DATA_HOME=/var/lib/family-gift-manager
 Environment=XDG_CONFIG_HOME=/var/lib/family-gift-manager/config
 ExecStart=/usr/bin/caddy run --environ --config __CADDYFILE_PATH__ --adapter caddyfile
-ExecReload=/usr/bin/caddy reload --config __CADDYFILE_PATH__ --adapter caddyfile --force
 TimeoutStopSec=5s
 LimitNOFILE=1048576
 Restart=on-failure
